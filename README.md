@@ -339,11 +339,11 @@ MIT © Lucas Ratnieks
 
 - [Better Auth Documentation](https://www.better-auth.com/docs)
 - [TypeORM Documentation](https://typeorm.io/)
-- [GitHub Repository](https://github.com/seu-usuario/better-auth-typeorm-adapter)
+- [GitHub Repository](https://github.com/luratnieks/better-auth-typeorm-adapter)
 
 ## 🐛 Issues & Support
 
-If you encounter any issues or need support, please [open an issue](https://github.com/seu-usuario/better-auth-typeorm-adapter/issues) on GitHub.
+If you encounter any issues or need support, please [open an issue](https://github.com/luratnieks/better-auth-typeorm-adapter/issues) on GitHub.
 
 ---
 
