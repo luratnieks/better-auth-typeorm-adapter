@@ -1,7 +1,9 @@
 # Better Auth TypeORM Adapter
 
-[![npm version](https://badge.fury.io/js/better-auth-typeorm-adapter.svg)](https://www.npmjs.com/package/better-auth-typeorm-adapter)
+[![npm version](https://img.shields.io/npm/v/better-auth-typeorm-adapter.svg)](https://www.npmjs.com/package/better-auth-typeorm-adapter)
+[![npm downloads](https://img.shields.io/npm/dm/better-auth-typeorm-adapter.svg)](https://www.npmjs.com/package/better-auth-typeorm-adapter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.1+-blue.svg)](https://www.typescriptlang.org/)
 
 A production-ready **TypeORM adapter** for [Better Auth](https://github.com/better-auth/better-auth) - the modern authentication library for TypeScript.
 
