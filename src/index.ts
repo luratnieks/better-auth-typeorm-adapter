@@ -1,0 +1,367 @@
+import { createAdapter, type DBAdapterDebugLogOption } from 'better-auth/adapters';
+import { DataSource, Repository, EntityTarget, ObjectLiteral, DeepPartial } from 'typeorm';
+
+/**
+ * TypeORM adapter configuration for Better Auth
+ */
+export interface TypeORMAdapterConfig {
+  /**
+   * TypeORM DataSource (must be initialized)
+   */
+  dataSource: DataSource;
+  
+  /**
+   * Debug logs for troubleshooting
+   */
+  debugLogs?: DBAdapterDebugLogOption;
+  
+  /**
+   * Whether table names should be plural
+   * @default false
+   */
+  usePlural?: boolean;
+
+  /**
+   * Custom entity mappings
+   * Map Better Auth model names to your TypeORM entities
+   * 
+   * @example
+   * ```ts
+   * {
+   *   user: MyUserEntity,
+   *   session: MySessionEntity,
+   *   account: MyAccountEntity,
+   *   verification: MyVerificationEntity
+   * }
+   * ```
+   */
+  entities?: {
+    user?: EntityTarget<ObjectLiteral>;
+    account?: EntityTarget<ObjectLiteral>;
+    session?: EntityTarget<ObjectLiteral>;
+    verification?: EntityTarget<ObjectLiteral>;
+  };
+}
+
+/**
+ * TypeORM Adapter for Better Auth
+ * 
+ * This adapter implements all necessary Better Auth operations
+ * using TypeORM as the ORM for PostgreSQL/MySQL/SQLite/etc.
+ * 
+ * @example
+ * ```ts
+ * import { typeormAdapter } from 'better-auth-typeorm-adapter';
+ * import { betterAuth } from 'better-auth';
+ * import { AppDataSource } from './data-source';
+ * 
+ * // Initialize DataSource first
+ * await AppDataSource.initialize();
+ * 
+ * const auth = betterAuth({
+ *   database: typeormAdapter({
+ *     dataSource: AppDataSource,
+ *   }),
+ * });
+ * ```
+ * 
+ * @param config - Adapter configuration
+ * @returns Better Auth adapter instance
+ */
+export const typeormAdapter = (config: TypeORMAdapterConfig) => {
+  const { dataSource, debugLogs = false, usePlural = false, entities = {} } = config;
+
+  /**
+   * Maps Better Auth model names to TypeORM entities
+   */
+  const getEntity = (model: string): EntityTarget<ObjectLiteral> => {
+    // Use custom entities if provided
+    if (entities[model as keyof typeof entities]) {
+      return entities[model as keyof typeof entities]!;
+    }
+
+    // Default: use model name as entity name
+    return model as any;
+  };
+
+  /**
+   * Gets TypeORM repository for the model
+   */
+  const getRepository = (model: string): Repository<any> => {
+    const entity = getEntity(model);
+    return dataSource.getRepository(entity);
+  };
+
+  /**
+   * Converts Better Auth where clause to TypeORM format
+   * Better Auth passes where as: [{ field: 'email', value: 'test@test.com', operator: 'eq' }]
+   * or as simple array: ['email', 'test@test.com']
+   */
+  const buildWhereClause = (where: any[]): Record<string, any> => {
+    const whereObj: Record<string, any> = {};
+    
+    if (!where || where.length === 0) {
+      return whereObj;
+    }
+    
+    // If array of objects (new Better Auth format)
+    if (typeof where[0] === 'object' && where[0].field) {
+      for (const condition of where) {
+        whereObj[condition.field] = condition.value;
+      }
+      return whereObj;
+    }
+    
+    // If simple alternating array [field, value, field, value]
+    for (let i = 0; i < where.length; i += 2) {
+      const field = where[i];
+      const value = where[i + 1];
+      if (field && value !== undefined) {
+        whereObj[field] = value;
+      }
+    }
+    
+    return whereObj;
+  };
+
+  /**
+   * Transforms input data (Better Auth) to database format
+   */
+  const transformInput = (data: any): any => {
+    if (!data || typeof data !== 'object') return data;
+    
+    const transformed: any = {};
+    
+    for (const [key, value] of Object.entries(data)) {
+      // Special mapping: providerId -> provider
+      if (key === 'providerId') {
+        transformed['provider'] = value;
+        continue;
+      }
+      
+      // Keep the rest as is
+      transformed[key] = value;
+    }
+    
+    return transformed;
+  };
+
+  /**
+   * Transforms output data (database) to Better Auth format
+   */
+  const transformOutput = (data: any): any => {
+    if (!data) return null;
+    if (Array.isArray(data)) return data.map(transformOutput);
+    if (typeof data !== 'object') return data;
+    
+    // Reverse mapping: provider -> providerId
+    if (data.provider !== undefined) {
+      data.providerId = data.provider;
+      delete data.provider;
+    }
+    
+    return data;
+  };
+
+  return createAdapter({
+    config: {
+      adapterId: 'typeorm-adapter',
+      adapterName: 'TypeORM Adapter',
+      usePlural,
+      debugLogs,
+      supportsJSON: true,
+      supportsDates: true,
+      supportsBooleans: true,
+      supportsNumericIds: false, // Using UUID
+      disableIdGeneration: true, // PostgreSQL generates UUID automatically
+    },
+    
+    adapter: ({ options, schema, debugLog }) => {
+      return {
+        /**
+         * Creates a new record
+         */
+        create: async ({ model, data, select }) => {
+          debugLog?.('create', { model, data, select });
+          
+          const repository = getRepository(model);
+          const transformed = transformInput(data);
+          
+          // Remove ID generated by Better Auth (nanoid)
+          // PostgreSQL will generate UUID automatically
+          if (transformed.id) {
+            delete transformed.id;
+          }
+          
+          const entity = repository.create(transformed as DeepPartial<any>);
+          const result = await repository.save(entity);
+          
+          return transformOutput(result);
+        },
+
+        /**
+         * Updates a record
+         */
+        update: async ({ model, where, update }) => {
+          debugLog?.('update', { model, where, update });
+          
+          const repository = getRepository(model);
+          const whereClause = buildWhereClause(where);
+          const transformed = transformInput(update);
+          
+          // Find existing record
+          const existing = await repository.findOne({ where: whereClause });
+          if (!existing) {
+            throw new Error(`Record not found in ${model}`);
+          }
+          
+          // Update
+          await repository.update(whereClause, transformed);
+          
+          // Return updated record
+          const updated = await repository.findOne({ where: whereClause });
+          return transformOutput(updated);
+        },
+
+        /**
+         * Updates multiple records
+         */
+        updateMany: async ({ model, where, update }) => {
+          debugLog?.('updateMany', { model, where, update });
+          
+          const repository = getRepository(model);
+          const whereClause = buildWhereClause(where);
+          const transformed = transformInput(update);
+          
+          const result = await repository.update(whereClause, transformed);
+          return result.affected || 0;
+        },
+
+        /**
+         * Deletes a record
+         */
+        delete: async ({ model, where }) => {
+          debugLog?.('delete', { model, where });
+          
+          const repository = getRepository(model);
+          const whereClause = buildWhereClause(where);
+          
+          await repository.delete(whereClause);
+        },
+
+        /**
+         * Deletes multiple records
+         */
+        deleteMany: async ({ model, where }) => {
+          debugLog?.('deleteMany', { model, where });
+          
+          const repository = getRepository(model);
+          const whereClause = buildWhereClause(where);
+          
+          const result = await repository.delete(whereClause);
+          return result.affected || 0;
+        },
+
+        /**
+         * Finds a single record
+         */
+        findOne: async ({ model, where, select }) => {
+          debugLog?.('findOne', { model, where, select });
+          
+          const repository = getRepository(model);
+          const whereClause = buildWhereClause(where);
+          
+          // Use a simple alias to avoid syntax issues
+          const alias = 'entity';
+          const query = repository.createQueryBuilder(alias);
+          
+          // Apply where filters
+          Object.entries(whereClause).forEach(([key, value], index) => {
+            const paramName = `param${index}`;
+            if (index === 0) {
+              query.where(`${alias}.${key} = :${paramName}`, { [paramName]: value });
+            } else {
+              query.andWhere(`${alias}.${key} = :${paramName}`, { [paramName]: value });
+            }
+          });
+          
+          // Apply select if provided
+          if (select && select.length > 0) {
+            const selectFields = select.map(field => `${alias}.${field}`);
+            query.select(selectFields);
+          }
+          
+          const result = await query.getOne();
+          return transformOutput(result);
+        },
+
+        /**
+         * Finds multiple records
+         */
+        findMany: async ({ model, where, limit, sortBy, offset }) => {
+          debugLog?.('findMany', { model, where, limit, sortBy, offset });
+          
+          const repository = getRepository(model);
+          const alias = 'entity';
+          const query = repository.createQueryBuilder(alias);
+          
+          // Apply where if provided
+          if (where && where.length > 0) {
+            const whereClause = buildWhereClause(where);
+            Object.entries(whereClause).forEach(([key, value], index) => {
+              const paramName = `param${index}`;
+              if (index === 0) {
+                query.where(`${alias}.${key} = :${paramName}`, { [paramName]: value });
+              } else {
+                query.andWhere(`${alias}.${key} = :${paramName}`, { [paramName]: value });
+              }
+            });
+          }
+          
+          // Apply limit
+          if (limit) {
+            query.limit(limit);
+          }
+          
+          // Apply offset
+          if (offset) {
+            query.offset(offset);
+          }
+          
+          // Apply sorting
+          if (sortBy) {
+            const { field, direction } = sortBy;
+            query.orderBy(`${alias}.${field}`, direction === 'asc' ? 'ASC' : 'DESC');
+          }
+          
+          const results = await query.getMany();
+          return transformOutput(results);
+        },
+
+        /**
+         * Counts records
+         */
+        count: async ({ model, where }) => {
+          debugLog?.('count', { model, where });
+          
+          const repository = getRepository(model);
+          
+          if (!where || where.length === 0) {
+            return await repository.count();
+          }
+          
+          const whereClause = buildWhereClause(where);
+          return await repository.count({ where: whereClause });
+        },
+
+        /**
+         * Adapter options (exposes configuration)
+         */
+        options: config,
+      };
+    },
+  });
+};
+
+export default typeormAdapter;
+

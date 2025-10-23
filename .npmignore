@@ -1,0 +1,22 @@
+# Source files
+src/
+tsconfig.json
+jest.config.js
+
+# Tests
+*.spec.ts
+*.test.ts
+coverage/
+
+# Development
+.github/
+.vscode/
+.idea/
+
+# Documentation (keep only what's needed)
+examples/
+
+# Other
+*.log
+.DS_Store
+
