@@ -15,6 +15,12 @@ A production-ready **TypeORM adapter** for [Better Auth](https://github.com/bett
 
 Precisa de ajuda ou quer contribuir? Entre em contato através do X ou e-mail. Pull requests e issues são sempre bem-vindos!
 
+## 🏆 Top Contribuidores
+
+Agradecimentos especiais aos contribuidores que ajudaram a melhorar este projeto:
+
+- **Felipe Ananias** ([@felipehenrique159](https://github.com/felipehenrique159)) - Melhorias em type safety e otimização de código
+
 ## ✨ Features
 
 - 🎯 **Full Better Auth Support** - All operations implemented (CRUD, queries, etc.)
