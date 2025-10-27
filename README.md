@@ -10,6 +10,7 @@ A production-ready **TypeORM adapter** for [Better Auth](https://github.com/bett
 ## 📞 Suporte e Contribuições
 
 **Contato do Autor:**
+
 - [![X (Twitter)](https://img.shields.io/badge/X-000000?style=flat&logo=x&logoColor=white)](https://x.com/olucasrat) [@olucasrat](https://x.com/olucasrat)
 - 📧 **E-mail:** lucas@uvvipay.com.br
 
@@ -84,20 +85,20 @@ export class User {
 <summary>See all required entities (Account, Session, Verification)</summary>
 
 ```typescript
-// account.entity.ts
+@Column('uuid')// account.entity.ts
 @Entity('account')
 export class Account {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { name: 'user_id' })
+  @Column('uuid', { name: 'user_id' })
   userId: string;
 
   @Column('varchar', { name: 'account_id' })
   accountId: string;
 
   @Column('varchar')
-  provider: string;
+  providerId: string;
 
   @Column('varchar', { nullable: true, name: 'access_token' })
   accessToken: string | null;
@@ -137,7 +138,7 @@ export class Session {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { name: 'user_id' })
+  @Column('uuid', { name: 'user_id' })
   userId: string;
 
   @Column('timestamp', { name: 'expires_at' })
@@ -166,7 +167,7 @@ export class Session {
 // verification.entity.ts
 @Entity('verification')
 export class Verification {
-  @PrimaryColumn('varchar')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column('varchar')
