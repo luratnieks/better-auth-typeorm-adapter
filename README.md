@@ -66,9 +66,6 @@ export class User {
   @Column('varchar', { nullable: true })
   image: string | null;
 
-  @Column('varchar', { nullable: true })
-  password: string | null;
-
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
@@ -107,6 +104,9 @@ export class Account {
 
   @Column('varchar', { nullable: true })
   scope: string | null;
+
+  @Column('varchar', { nullable: true })
+  password: string | null;
 
   @Column('varchar', { nullable: true, name: 'id_token' })
   idToken: string | null;
