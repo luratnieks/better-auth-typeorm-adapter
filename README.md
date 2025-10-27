@@ -85,7 +85,7 @@ export class User {
 <summary>See all required entities (Account, Session, Verification)</summary>
 
 ```typescript
-@Column('uuid')// account.entity.ts
+// account.entity.ts
 @Entity('account')
 export class Account {
   @PrimaryGeneratedColumn('uuid')
