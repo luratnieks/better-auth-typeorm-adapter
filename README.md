@@ -7,6 +7,14 @@
 
 A production-ready **TypeORM adapter** for [Better Auth](https://github.com/better-auth/better-auth) - the modern authentication library for TypeScript.
 
+## 📞 Suporte e Contribuições
+
+**Contato do Autor:**
+- [![X (Twitter)](https://img.shields.io/badge/X-000000?style=flat&logo=x&logoColor=white)](https://x.com/olucasrat) [@olucasrat](https://x.com/olucasrat)
+- 📧 **E-mail:** lucas@uvvipay.com.br
+
+Precisa de ajuda ou quer contribuir? Entre em contato através do X ou e-mail. Pull requests e issues são sempre bem-vindos!
+
 ## ✨ Features
 
 - 🎯 **Full Better Auth Support** - All operations implemented (CRUD, queries, etc.)

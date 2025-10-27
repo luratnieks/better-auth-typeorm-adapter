@@ -150,18 +150,6 @@ npm publish
 
 ---
 
-## 🎯 Diferencial do Seu Pacote
-
-Comparado com `@hedystia/better-auth-typeorm`:
-
-✅ **Seu pacote:**
-- Nome mais descritivo (`adapter` no nome)
-- Documentação mais completa
-- Exemplos mais detalhados
-- README mais profissional
-- Guia de contribuição
-
----
 
 ## 🏆 Conquistas
 
