@@ -54,7 +54,13 @@ Create entities matching Better Auth schema:
 
 ```typescript
 // user.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('user')
 export class User {
@@ -257,10 +263,10 @@ export class AuthModule implements OnModuleInit {
 
 ```typescript
 typeormAdapter({
-  dataSource: AppDataSource,  // Required
-  debugLogs: true,            // Optional: Enable debug logs
-  usePlural: false,           // Optional: Use plural table names
-})
+  dataSource: AppDataSource, // Required
+  debugLogs: true, // Optional: Enable debug logs
+  usePlural: false, // Optional: Use plural table names
+});
 ```
 
 ### Custom Entity Mapping
@@ -276,7 +282,7 @@ typeormAdapter({
     account: MyCustomAccountEntity,
     verification: MyCustomVerificationEntity,
   },
-})
+});
 ```
 
 ### Debug Mode
@@ -290,7 +296,7 @@ typeormAdapter({
     isRunningAdapterTests: true,
     logQueries: true,
   },
-})
+});
 ```
 
 ## 📋 Supported Databases
@@ -313,9 +319,9 @@ Creates a Better Auth adapter using TypeORM.
 #### Parameters
 
 - `config.dataSource` **(required)**: TypeORM DataSource instance (must be initialized)
-- `config.debugLogs` *(optional)*: Enable debug logs
-- `config.usePlural` *(optional)*: Use plural table names (default: false)
-- `config.entities` *(optional)*: Custom entity mappings
+- `config.debugLogs` _(optional)_: Enable debug logs
+- `config.usePlural` _(optional)_: Use plural table names (default: false)
+- `config.entities` _(optional)_: Custom entity mappings
 
 #### Returns
 
@@ -332,6 +338,36 @@ Run with coverage:
 ```bash
 npm run test:cov
 ```
+
+## 🛠️ Local Development
+
+Want to test the adapter locally without publishing to npm? We've got you covered!
+
+### Quick Setup
+
+```bash
+# 1. In the adapter directory
+./link-local.sh /path/to/your/test-project
+
+# 2. Start development mode
+npm run build:watch
+```
+
+### Manual Setup
+
+```bash
+# 1. Build and link the adapter
+npm run build
+npm link
+
+# 2. In your test project
+npm link better-auth-typeorm-adapter
+
+# 3. Start watch mode in the adapter
+npm run build:watch
+```
+
+For detailed instructions, see [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md).
 
 ## 🤝 Contributing
 
