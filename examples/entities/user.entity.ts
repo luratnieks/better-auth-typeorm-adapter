@@ -1,37 +1,40 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from 'typeorm';
+import { Session } from './session.entity';
+import { Account } from './account.entity';
 
-/**
- * User Entity for Better Auth
- * 
- * Table: user
- * Schema: Compatible with Better Auth 1.3+
- * 
- * NOTE: Using UUID with automatic generation by PostgreSQL
- */
 @Entity('user')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { unique: true })
+  @Column({ type: 'varchar', length: 255 })
+  name: string;
+
+  @Column({ type: 'varchar', length: 255, unique: true })
   email: string;
 
-  @Column('boolean', { default: false, name: 'email_verified' })
+  @Column({ type: 'boolean', default: false })
   emailVerified: boolean;
 
-  @Column('varchar', { nullable: true })
-  name: string | null;
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  image?: string;
 
-  @Column('varchar', { nullable: true })
-  image: string | null;
-
-  @Column('varchar', { nullable: true })
-  password: string | null;
-
-  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
+  @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
+  @UpdateDateColumn()
   updatedAt: Date;
-}
 
+  @OneToMany(() => Session, (session) => session.user)
+  sessions?: Session[];
+
+  @OneToMany(() => Account, (account) => account.user)
+  accounts?: Account[];
+}

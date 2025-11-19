@@ -1,31 +1,28 @@
-import { Entity, Column, PrimaryColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
-/**
- * Verification Entity for Better Auth
- * 
- * Table: verification
- * Schema: Compatible with Better Auth 1.3+
- * 
- * Used for:
- * - Email verification
- * - Password reset
- * - General verification tokens
- */
 @Entity('verification')
 export class Verification {
-  @PrimaryColumn('varchar')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar')
-  identifier: string;  // Email or other identifier
+  @Column({ type: 'varchar', length: 255 })
+  identifier: string;
 
-  @Column('varchar')
-  value: string;  // Token
+  @Column({ type: 'varchar', length: 500 })
+  value: string;
 
-  @Column('timestamp', { name: 'expires_at' })
+  @Column({ type: 'timestamp' })
   expiresAt: Date;
 
-  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
+  @CreateDateColumn()
   createdAt: Date;
-}
 
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
