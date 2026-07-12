@@ -24,7 +24,7 @@ const AppDataSource = new DataSource({
 
 // 2. Initialize DataSource
 await AppDataSource.initialize();
-console.log('✅ DataSource initialized');
+console.log('DataSource initialized');
 
 // 3. Create Better Auth instance with TypeORM adapter
 export const auth = betterAuth({
@@ -42,7 +42,7 @@ export const auth = betterAuth({
   },
 });
 
-console.log('✅ Better Auth configured with TypeORM adapter');
+console.log('Better Auth configured with TypeORM adapter');
 
 // 4. Use Better Auth
 export type Auth = typeof auth;

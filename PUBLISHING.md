@@ -1,8 +1,8 @@
-# 📦 Guia de Publicação no NPM
+# Guia de Publicação no NPM
 
 Este guia explica como publicar o `better-auth-typeorm-adapter` no NPM.
 
-## ✅ Pré-requisitos
+## Pré-requisitos
 
 1. **Conta no NPM**
    - Crie uma conta em: https://www.npmjs.com/signup
@@ -15,7 +15,7 @@ Este guia explica como publicar o `better-auth-typeorm-adapter` no NPM.
    - Digite seu username, password e email
    - Se tiver 2FA habilitado, digite o código
 
-## 🚀 Passos para Publicar
+## Passos para Publicar
 
 ### 1. Verificar se o nome está disponível
 
@@ -23,8 +23,7 @@ Este guia explica como publicar o `better-auth-typeorm-adapter` no NPM.
 npm search better-auth-typeorm-adapter
 ```
 
-Se não encontrar nada, o nome está disponível! ✅
-
+Se não encontrar nada, o nome está disponível! 
 ### 2. Build do projeto
 
 ```bash
@@ -55,9 +54,8 @@ npm install /caminho/para/better-auth-typeorm-adapter-1.0.0.tgz
 npm publish
 ```
 
-**Pronto!** Seu pacote está no NPM! 🎉
-
-## 📝 Atualizações Futuras
+**Pronto!** Seu pacote está no NPM! 
+## Atualizações Futuras
 
 Quando fizer mudanças e quiser publicar uma nova versão:
 
@@ -86,19 +84,19 @@ git push && git push --tags
 npm publish
 ```
 
-## 🔍 Verificar Publicação
+## Verificar Publicação
 
 Após publicar, verifique em:
 - https://www.npmjs.com/package/better-auth-typeorm-adapter
 - Aguarde alguns minutos para o NPM indexar
 
-## 📊 Estatísticas
+## Estatísticas
 
 Você pode ver downloads e estatísticas em:
 - https://www.npmjs.com/package/better-auth-typeorm-adapter
 - https://npmtrends.com/better-auth-typeorm-adapter
 
-## 🎯 Como os Usuários Vão Usar
+## Como os Usuários Vão Usar
 
 ### Instalação
 
@@ -144,22 +142,22 @@ const auth = betterAuth({
 });
 ```
 
-## 🔐 Repositório Público
+## Repositório Público
 
 **Sim, o repositório DEVE ser público!**
 
 Motivos:
-- ✅ Pacotes open source precisam de repositório público
-- ✅ NPM vai linkar para o GitHub (badges, issues, etc)
-- ✅ Usuários podem ver o código-fonte
-- ✅ Permite contribuições da comunidade
-- ✅ Aumenta a confiança dos desenvolvedores
-- ✅ Melhor para SEO e descoberta
+- Pacotes open source precisam de repositório público
+- NPM vai linkar para o GitHub (badges, issues, etc)
+- Usuários podem ver o código-fonte
+- Permite contribuições da comunidade
+- Aumenta a confiança dos desenvolvedores
+- Melhor para SEO e descoberta
 
 O repositório já está público em:
 https://github.com/luratnieks/better-auth-typeorm-adapter
 
-## 📋 Checklist Final
+## Checklist Final
 
 Antes de publicar, verifique:
 
@@ -174,7 +172,7 @@ Antes de publicar, verifique:
 - [ ] Login no NPM (`npm login`)
 - [ ] Nome disponível no NPM
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Erro: "You must be logged in to publish packages"
 ```bash
@@ -196,7 +194,7 @@ Você não tem permissão. Verifique se está logado com a conta correta:
 npm whoami
 ```
 
-## 🎉 Após Publicar
+## Após Publicar
 
 1. **Adicione badges ao README**
    - Badge do NPM (versão)
@@ -214,7 +212,7 @@ npm whoami
    - Downloads no NPM
    - Feedback da comunidade
 
-## 📚 Recursos
+## Recursos
 
 - [NPM Publishing Guide](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry)
 - [Semantic Versioning](https://semver.org/)

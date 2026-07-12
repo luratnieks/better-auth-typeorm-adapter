@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -8,7 +8,7 @@ import {
 
 @Entity('verification')
 export class Verification {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('text')
   id: string;
 
   @Column({ type: 'varchar', length: 255 })

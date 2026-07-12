@@ -1,7 +1,6 @@
 # Contributing to Better Auth TypeORM Adapter
 
-Thank you for your interest in contributing! 🎉
-
+Thank you for your interest in contributing! 
 ## Getting Started
 
 1. Fork the repository
@@ -71,5 +70,4 @@ docs: update README with examples
 
 Open an issue or start a discussion on GitHub.
 
-Thank you for contributing! 🙏
-
+Thank you for contributing! 
