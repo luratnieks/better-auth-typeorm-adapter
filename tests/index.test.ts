@@ -453,6 +453,86 @@ describe('plugin models (regression: only the 4 core models could be mapped)', (
   });
 });
 
+describe('incrementOne rate-limit guard (regression: issue #5 infinite loop)', () => {
+  /** Mirrors the API key plugin's rate-limit table shape. */
+  const apiKeyOptions = {
+    plugins: [
+      {
+        id: 'apikey-like',
+        schema: {
+          apikey: {
+            fields: {
+              requestCount: { type: 'number', required: false },
+              lastRequest: { type: 'date', required: false },
+            },
+          },
+        },
+      },
+    ],
+  } as unknown as BetterAuthOptions;
+
+  it('consumes the first rate-limit slot when lastRequest is null, then reports the lost race', async () => {
+    const { adapter } = createContext(apiKeyOptions);
+    const row = await adapter.create<Record<string, any>>({
+      model: 'apikey',
+      data: { requestCount: 0 },
+    });
+    assert.equal(row.lastRequest ?? null, null);
+
+    const now = new Date();
+    const guard = [
+      { field: 'id', value: row.id },
+      { field: 'lastRequest', value: null },
+    ];
+
+    const first = await adapter.incrementOne<Record<string, any>>({
+      model: 'apikey',
+      where: guard,
+      increment: {},
+      set: { requestCount: 1, lastRequest: now },
+    });
+    assert.ok(first, 'guarded update must succeed while lastRequest IS NULL');
+    assert.equal(first!.requestCount, 1);
+
+    const second = await adapter.incrementOne<Record<string, any>>({
+      model: 'apikey',
+      where: guard,
+      increment: {},
+      set: { requestCount: 1, lastRequest: new Date() },
+    });
+    assert.equal(second, null, 'guard must not match once lastRequest is set');
+  });
+
+  it('applies numeric increments to the matched row', async () => {
+    const { adapter } = createContext(apiKeyOptions);
+    const row = await adapter.create<Record<string, any>>({
+      model: 'apikey',
+      data: { requestCount: 1, lastRequest: new Date() },
+    });
+
+    const updated = await adapter.incrementOne<Record<string, any>>({
+      model: 'apikey',
+      where: [{ field: 'id', value: row.id }],
+      increment: { requestCount: 5 },
+    });
+    assert.equal(updated!.requestCount, 6);
+  });
+});
+
+describe('consumeOne (single-use token consumption)', () => {
+  it('returns the row exactly once and null afterwards', async () => {
+    const { adapter } = createContext();
+    const user = await createUser(adapter);
+    const where = [{ field: 'id', value: user.id }];
+
+    const consumed = await adapter.consumeOne<Record<string, any>>({ model: 'user', where });
+    assert.equal(consumed!.id, user.id);
+
+    const again = await adapter.consumeOne<Record<string, any>>({ model: 'user', where });
+    assert.equal(again, null);
+  });
+});
+
 describe('generateEntitySchemas', () => {
   it('creates one EntitySchema per Better Auth model', () => {
     const schemas = generateEntitySchemas({});
