@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -11,7 +11,7 @@ import { Account } from './account.entity';
 
 @Entity('user')
 export class User {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('text')
   id: string;
 
   @Column({ type: 'varchar', length: 255 })

@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -11,10 +11,10 @@ import { User } from './user.entity';
 
 @Entity('session')
 export class Session {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('text')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'text' })
   userId: string;
 
   @Column({ type: 'text', unique: true })

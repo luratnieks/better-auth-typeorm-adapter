@@ -6,12 +6,14 @@
 
 import { betterAuth } from 'better-auth';
 import { typeormAdapter } from 'better-auth-typeorm-adapter';
-import { DataSource, Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { DataSource, Entity, Column, PrimaryColumn } from 'typeorm';
 
-// Custom entity with different name
+// Custom entity with different name.
+// Note: the id is a text primary column — Better Auth generates and
+// supplies its own string ids, so do NOT use @PrimaryGeneratedColumn.
 @Entity('app_users') // Different table name
 export class AppUser {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('text')
   id: string;
 
   @Column('varchar', { unique: true })
@@ -26,8 +28,11 @@ export class AppUser {
   @Column('varchar', { nullable: true })
   image: string | null;
 
-  @Column('varchar', { nullable: true })
-  password: string | null;
+  @Column('timestamptz')
+  createdAt: Date;
+
+  @Column('timestamptz')
+  updatedAt: Date;
 
   // Custom fields
   @Column('varchar', { nullable: true })
@@ -60,9 +65,10 @@ const AppDataSource = new DataSource({
   entities: [AppUser, AppAccount, AppSession, AppVerification],
 });
 
-await AppDataSource.initialize();
-
-// Configure Better Auth with custom entity mapping
+// Configure Better Auth with custom entity mapping.
+// The adapter initializes the DataSource lazily, so no explicit
+// initialize() call is required. Plugin models can be mapped too
+// (e.g. organization: AppOrganization).
 export const auth = betterAuth({
   database: typeormAdapter({
     dataSource: AppDataSource,
@@ -79,5 +85,5 @@ export const auth = betterAuth({
   },
 });
 
-console.log('✅ Better Auth configured with custom entities');
+console.log('Better Auth configured with custom entities');
 

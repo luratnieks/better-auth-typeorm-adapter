@@ -1,6 +1,6 @@
-# 🎉 Pacote Publicado com Sucesso!
+# Pacote Publicado com Sucesso!
 
-## ✅ Status: LIVE no NPM
+## Status: LIVE no NPM
 
 **Pacote:** `better-auth-typeorm-adapter`  
 **Versão:** `1.0.0`  
@@ -9,15 +9,15 @@
 
 ---
 
-## 🔗 Links Importantes
+## Links Importantes
 
-- 📦 **NPM Package:** https://www.npmjs.com/package/better-auth-typeorm-adapter
-- 🐙 **GitHub Repository:** https://github.com/luratnieks/better-auth-typeorm-adapter
-- 📚 **Better Auth Docs:** https://www.better-auth.com/docs
+- **NPM Package:** https://www.npmjs.com/package/better-auth-typeorm-adapter
+- **GitHub Repository:** https://github.com/luratnieks/better-auth-typeorm-adapter
+- **Better Auth Docs:** https://www.better-auth.com/docs
 
 ---
 
-## 📥 Instalação
+## Instalação
 
 Os usuários podem instalar seu pacote agora:
 
@@ -35,7 +35,7 @@ pnpm add better-auth-typeorm-adapter
 
 ---
 
-## 💻 Uso
+## Uso
 
 ```typescript
 import { typeormAdapter } from 'better-auth-typeorm-adapter';
@@ -71,7 +71,7 @@ const auth = betterAuth({
 
 ---
 
-## 📊 Estatísticas
+## Estatísticas
 
 Acompanhe o crescimento do seu pacote:
 
@@ -81,7 +81,7 @@ Acompanhe o crescimento do seu pacote:
 
 ---
 
-## 🚀 Próximos Passos
+## Próximos Passos
 
 ### 1. Divulgação
 
@@ -109,7 +109,7 @@ Acompanhe o crescimento do seu pacote:
 
 ---
 
-## 🔄 Como Atualizar o Pacote
+## Como Atualizar o Pacote
 
 Quando fizer mudanças:
 
@@ -130,7 +130,7 @@ npm publish
 
 ---
 
-## 📝 Informações do Pacote
+## Informações do Pacote
 
 **Tamanho:** 6.7 kB (compactado)  
 **Arquivos incluídos:**
@@ -151,18 +151,18 @@ npm publish
 ---
 
 
-## 🏆 Conquistas
+## Conquistas
 
-- ✅ Primeiro pacote NPM publicado
-- ✅ Código open source no GitHub
-- ✅ Documentação completa
-- ✅ TypeScript com tipos completos
-- ✅ Exemplos funcionais
-- ✅ Licença MIT
+- Primeiro pacote NPM publicado
+- Código open source no GitHub
+- Documentação completa
+- TypeScript com tipos completos
+- Exemplos funcionais
+- Licença MIT
 
 ---
 
-## 📞 Suporte
+## Suporte
 
 Se usuários encontrarem problemas:
 - **Issues:** https://github.com/luratnieks/better-auth-typeorm-adapter/issues
@@ -170,7 +170,7 @@ Se usuários encontrarem problemas:
 
 ---
 
-## 🙏 Agradecimentos
+## Agradecimentos
 
 - [Better Auth](https://github.com/better-auth/better-auth) - Framework de autenticação
 - [TypeORM](https://typeorm.io/) - ORM usado pelo adapter
@@ -178,7 +178,7 @@ Se usuários encontrarem problemas:
 
 ---
 
-**Parabéns pela publicação! 🎉**
+**Parabéns pela publicação! **
 
 Seu adapter agora está disponível para milhares de desenvolvedores ao redor do mundo!
 

@@ -5,371 +5,197 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.1+-blue.svg)](https://www.typescriptlang.org/)
 
-A production-ready **TypeORM adapter** for [Better Auth](https://github.com/better-auth/better-auth) - the modern authentication library for TypeScript.
+A production-ready **TypeORM adapter** for [Better Auth](https://github.com/better-auth/better-auth) — the modern authentication library for TypeScript.
 
-## 📞 Suporte e Contribuições
+Validated against the official `@better-auth/test-utils` adapter test suites (CRUD semantics, auth flows, transactions, UUID IDs, and case-insensitive matching).
 
-**Contato do Autor:**
+## Support & Contributions
+
+**Author Contact:**
 
 - [![X (Twitter)](https://img.shields.io/badge/X-000000?style=flat&logo=x&logoColor=white)](https://x.com/olucasrat) [@olucasrat](https://x.com/olucasrat)
-- 📧 **E-mail:** lucas@uvvipay.com.br
+- **Email:** lucas@uvvipay.com.br
 
-Precisa de ajuda ou quer contribuir? Entre em contato através do X ou e-mail. Pull requests e issues são sempre bem-vindos!
+Need help or want to contribute? Reach out on X or by email. Pull requests and issues are always welcome!
 
-## 🏆 Top Contribuidores
+## Features
 
-Agradecimentos especiais aos contribuidores que ajudaram a melhorar este projeto:
+- **Full Better Auth Support** — Every adapter operation, every `where` operator (`eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `not_in`, `contains`, `starts_with`, `ends_with`), `OR` connectors, and case-insensitive matching
+- **Plugin Ready** — Models added by plugins (`organization`, `twoFactor`, `passkey`, ...) resolve automatically; no manual mapping required
+- **Zero-Boilerplate Entities** — `generateEntitySchemas()` builds TypeORM `EntitySchema` definitions straight from your Better Auth options
+- **ORM-Native** — Uses TypeORM repositories, so your entity hooks (`@BeforeInsert`, ...), transformers, and naming strategies keep working
+- **Multi-Database** — PostgreSQL, MySQL/MariaDB, SQLite, SQL Server, CockroachDB, and more
+- **Soft Delete** — Opt-in per model via `softDeleteEnabledEntities`
+- **CLI Schema Generation** — `npx @better-auth/cli generate` emits decorator-based entity classes
+- **Tested** — Runs the official Better Auth adapter test suites plus a dedicated regression suite
+- **Debug Mode** — Built-in logging for troubleshooting
 
-- **Felipe Ananias** ([@felipehenrique159](https://github.com/felipehenrique159)) - Melhorias em type safety e otimização de código
-
-## ✨ Features
-
-- 🎯 **Full Better Auth Support** - All operations implemented (CRUD, queries, etc.)
-- 🔒 **Type-Safe** - 100% TypeScript with full type inference
-- 🗄️ **Multi-Database** - Works with PostgreSQL, MySQL, SQLite, and more
-- ⚡ **Production Ready** - Battle-tested in real applications
-- 🔧 **Flexible** - Custom entity mappings and configuration
-- 📦 **Zero Dependencies** - Only peer dependencies on Better Auth and TypeORM
-- 🐛 **Debug Mode** - Built-in logging for troubleshooting
-
-## 📦 Installation
+## Installation
 
 ```bash
 npm install better-auth-typeorm-adapter better-auth typeorm
 ```
 
-```bash
-yarn add better-auth-typeorm-adapter better-auth typeorm
-```
+Requires `better-auth >= 1.6`, `typeorm >= 0.3`, and Node.js `>= 20.19`.
 
-```bash
-pnpm add better-auth-typeorm-adapter better-auth typeorm
-```
+## Quick Start
 
-## 🚀 Quick Start
+### Option A — Generated entity schemas (recommended)
 
-### 1. Create TypeORM Entities
-
-Create entities matching Better Auth schema:
-
-```typescript
-// user.entity.ts
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-} from 'typeorm';
-
-@Entity('user')
-export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column('varchar', { unique: true })
-  email: string;
-
-  @Column('boolean', { default: false, name: 'email_verified' })
-  emailVerified: boolean;
-
-  @Column('varchar', { nullable: true })
-  name: string | null;
-
-  @Column('varchar', { nullable: true })
-  image: string | null;
-
-  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
-  updatedAt: Date;
-}
-```
-
-<details>
-<summary>See all required entities (Account, Session, Verification)</summary>
-
-```typescript
-// account.entity.ts
-@Entity('account')
-export class Account {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column('uuid', { name: 'user_id' })
-  userId: string;
-
-  @Column('varchar', { name: 'account_id' })
-  accountId: string;
-
-  @Column('varchar')
-  providerId: string;
-
-  @Column('varchar', { nullable: true, name: 'access_token' })
-  accessToken: string | null;
-
-  @Column('varchar', { nullable: true, name: 'refresh_token' })
-  refreshToken: string | null;
-
-  @Column('timestamp', { nullable: true, name: 'expires_at' })
-  expiresAt: Date | null;
-
-  @Column('varchar', { nullable: true })
-  scope: string | null;
-
-  @Column('varchar', { nullable: true })
-  password: string | null;
-
-  @Column('varchar', { nullable: true, name: 'id_token' })
-  idToken: string | null;
-
-  @Column('varchar', { nullable: true, name: 'token_type' })
-  tokenType: string | null;
-
-  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
-  updatedAt: Date;
-
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: User;
-}
-
-// session.entity.ts
-@Entity('session')
-export class Session {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column('uuid', { name: 'user_id' })
-  userId: string;
-
-  @Column('timestamp', { name: 'expires_at' })
-  expiresAt: Date;
-
-  @Column('varchar', { unique: true })
-  token: string;
-
-  @Column('varchar', { nullable: true, name: 'ip_address' })
-  ipAddress: string | null;
-
-  @Column('varchar', { nullable: true, name: 'user_agent' })
-  userAgent: string | null;
-
-  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
-  updatedAt: Date;
-
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: User;
-}
-
-// verification.entity.ts
-@Entity('verification')
-export class Verification {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column('varchar')
-  identifier: string;
-
-  @Column('varchar')
-  value: string;
-
-  @Column('timestamp', { name: 'expires_at' })
-  expiresAt: Date;
-
-  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
-  createdAt: Date;
-}
-```
-
-</details>
-
-### 2. Setup DataSource
-
-```typescript
-// data-source.ts
-import { DataSource } from 'typeorm';
-import { User, Account, Session, Verification } from './entities';
-
-export const AppDataSource = new DataSource({
-  type: 'postgres',
-  host: 'localhost',
-  port: 5432,
-  username: 'postgres',
-  password: 'postgres',
-  database: 'myapp',
-  entities: [User, Account, Session, Verification],
-  synchronize: false, // Use migrations in production
-});
-```
-
-### 3. Configure Better Auth
+Let the adapter derive every table (including plugin tables) from your Better Auth options:
 
 ```typescript
 // auth.ts
-import { betterAuth } from 'better-auth';
-import { typeormAdapter } from 'better-auth-typeorm-adapter';
-import { AppDataSource } from './data-source';
+import { betterAuth, type BetterAuthOptions } from 'better-auth';
+import { typeormAdapter, generateEntitySchemas } from 'better-auth-typeorm-adapter';
+import { DataSource } from 'typeorm';
 
-// Initialize DataSource
-await AppDataSource.initialize();
+const betterAuthOptions = {
+  emailAndPassword: { enabled: true },
+  // plugins: [organization(), twoFactor()],
+} satisfies BetterAuthOptions;
+
+export const AppDataSource = new DataSource({
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
+  entities: generateEntitySchemas(betterAuthOptions),
+  synchronize: false, // use migrations in production
+});
 
 export const auth = betterAuth({
-  database: typeormAdapter({
-    dataSource: AppDataSource,
-  }),
-  emailAndPassword: {
-    enabled: true,
-  },
-  // ... other Better Auth options
+  ...betterAuthOptions,
+  database: typeormAdapter({ dataSource: AppDataSource }),
 });
 ```
 
-### 4. Use with NestJS (Optional)
+The adapter initializes the `DataSource` lazily on first use, so you don't need to call `initialize()` yourself.
+
+To create the tables, set `synchronize: true` in development and TypeORM will build them from the registered schemas automatically. In production, generate migrations from those schemas instead (`npx typeorm migration:generate`) and keep `synchronize: false`.
+
+### Option B — Generated entity classes (CLI)
+
+Generate decorator-based entity classes and keep them in your codebase:
+
+```bash
+npx @better-auth/cli generate --output src/entities/auth-entities.ts
+```
+
+The generated classes use `@PrimaryColumn('text')` (Better Auth supplies its own string IDs), map relations from the schema references, and use `simple-json` columns for JSON fields. Register them on your `DataSource` and you're done.
+
+### Option C — Hand-written entities
+
+If you prefer writing entities yourself, follow this contract:
+
+- **`id` must be a text primary column** (`@PrimaryColumn('text')`), NOT `@PrimaryGeneratedColumn('uuid')` — Better Auth generates and supplies its own string IDs.
+- **Property names must match the Better Auth field names** (`userId`, `expiresAt`, ...). Column names can differ (e.g., snake_case via `@Column({ name: 'user_id' })` or a naming strategy).
+- JSON fields (from plugins) should use `simple-json` columns.
 
 ```typescript
-// auth.module.ts
-import { Module, OnModuleInit } from '@nestjs/common';
-import { betterAuth } from 'better-auth';
-import { typeormAdapter } from 'better-auth-typeorm-adapter';
-import { DataSource } from 'typeorm';
+// user.entity.ts
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
-@Module({})
-export class AuthModule implements OnModuleInit {
-  constructor(private dataSource: DataSource) {}
+@Entity('user')
+export class User {
+  @PrimaryColumn('text')
+  id!: string;
 
-  async onModuleInit() {
-    const auth = betterAuth({
-      database: typeormAdapter({
-        dataSource: this.dataSource,
-        debugLogs: process.env.NODE_ENV === 'development',
-      }),
-    });
-  }
+  @Column('varchar', { length: 255, unique: true })
+  email!: string;
+
+  @Column('boolean')
+  emailVerified!: boolean;
+
+  @Column('text')
+  name!: string;
+
+  @Column('text', { nullable: true })
+  image?: string | null;
+
+  @Column('timestamptz') // use 'datetime' on MySQL/SQLite
+  createdAt!: Date;
+
+  @Column('timestamptz')
+  updatedAt!: Date;
 }
 ```
 
-## 🔧 Configuration
-
-### Basic Configuration
+## Configuration
 
 ```typescript
 typeormAdapter({
-  dataSource: AppDataSource, // Required
-  debugLogs: true, // Optional: Enable debug logs
-  usePlural: false, // Optional: Use plural table names
-});
-```
-
-### Custom Entity Mapping
-
-Map Better Auth models to your custom entities:
-
-```typescript
-typeormAdapter({
+  // Required: the TypeORM DataSource (initialized lazily if needed).
   dataSource: AppDataSource,
+
+  // Optional: enable Better Auth adapter debug logs.
+  debugLogs: process.env.NODE_ENV === 'development',
+
+  // Optional: plural table names (users, sessions, ...). Default: false.
+  usePlural: false,
+
+  // Optional: explicit model -> entity mapping. Any model can be mapped,
+  // including plugin models. Unmapped models resolve by entity/table name.
   entities: {
     user: MyCustomUserEntity,
-    session: MyCustomSessionEntity,
-    account: MyCustomAccountEntity,
-    verification: MyCustomVerificationEntity,
+    organization: MyOrgEntity,
   },
+
+  // Optional: models deleted via soft delete. The entity must declare
+  // a @DeleteDateColumn().
+  softDeleteEnabledEntities: ['user'],
 });
 ```
 
-### Debug Mode
+### `generateEntitySchemas(options, config?)`
 
-Enable detailed logging for troubleshooting:
+Builds one TypeORM `EntitySchema` per Better Auth model (core + plugins), derived from your auth options. Use it to register entities without writing any classes:
 
 ```typescript
-typeormAdapter({
-  dataSource: AppDataSource,
-  debugLogs: {
-    isRunningAdapterTests: true,
-    logQueries: true,
-  },
+const dataSource = new DataSource({
+  type: 'better-sqlite3',
+  database: 'auth.db',
+  entities: generateEntitySchemas(betterAuthOptions, { usePlural: false }),
+  synchronize: true, // or manage via migrations
 });
 ```
 
-## 📋 Supported Databases
+## Supported Databases
 
 Works with all TypeORM-supported databases:
 
-- ✅ PostgreSQL
-- ✅ MySQL / MariaDB
-- ✅ SQLite
-- ✅ Microsoft SQL Server
-- ✅ Oracle
-- ✅ CockroachDB
+- PostgreSQL
+- MySQL / MariaDB
+- SQLite
+- Microsoft SQL Server
+- Oracle
+- CockroachDB
 
-## 🎯 API Reference
+## API Reference
 
 ### `typeormAdapter(config)`
 
-Creates a Better Auth adapter using TypeORM.
+Creates a Better Auth database adapter backed by TypeORM repositories.
 
-#### Parameters
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `dataSource` | `DataSource` | required | TypeORM DataSource; initialized lazily when needed |
+| `debugLogs` | `boolean \| object` | `false` | Better Auth adapter debug logging |
+| `usePlural` | `boolean` | `false` | Plural table names |
+| `entities` | `Record<string, EntityTarget>` | `{}` | Explicit model → entity mapping (any model, plugins included) |
+| `softDeleteEnabledEntities` | `string[]` | `[]` | Models removed via `softRemove` instead of hard delete |
 
-- `config.dataSource` **(required)**: TypeORM DataSource instance (must be initialized)
-- `config.debugLogs` _(optional)_: Enable debug logs
-- `config.usePlural` _(optional)_: Use plural table names (default: false)
-- `config.entities` _(optional)_: Custom entity mappings
+### `generateEntitySchemas(options, config?)`
 
-#### Returns
+Returns `EntitySchema[]` for every Better Auth model derived from `options`. `config.usePlural` must match the adapter's `usePlural`.
 
-Better Auth adapter instance.
-
-## 🧪 Testing
-
-```bash
-npm test
-```
-
-Run with coverage:
+## Testing
 
 ```bash
-npm run test:cov
+npm test             # regression tests (node:test) + official adapter suites (vitest)
+npm run test:unit    # regression tests only
+npm run test:adapter # official @better-auth/test-utils suites only
 ```
 
-## 🛠️ Local Development
-
-Want to test the adapter locally without publishing to npm? We've got you covered!
-
-### Quick Setup
-
-```bash
-# 1. In the adapter directory
-./link-local.sh /path/to/your/test-project
-
-# 2. Start development mode
-npm run build:watch
-```
-
-### Manual Setup
-
-```bash
-# 1. Build and link the adapter
-npm run build
-npm link
-
-# 2. In your test project
-npm link better-auth-typeorm-adapter
-
-# 3. Start watch mode in the adapter
-npm run build:watch
-```
-
-For detailed instructions, see [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md).
-
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -379,27 +205,25 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📝 License
+## License
 
-MIT © Lucas Ratnieks
+MIT Lucas Ratnieks
 
-## 🙏 Credits
+## Credits
 
-- [Better Auth](https://github.com/better-auth/better-auth) - The authentication library this adapter is built for
-- [TypeORM](https://typeorm.io/) - The ORM this adapter uses
+- [Better Auth](https://github.com/better-auth/better-auth) — The authentication library this adapter is built for
+- [TypeORM](https://typeorm.io/) — The ORM this adapter uses
 
-## 📚 Resources
+## Resources
 
 - [Better Auth Documentation](https://www.better-auth.com/docs)
 - [TypeORM Documentation](https://typeorm.io/)
 - [GitHub Repository](https://github.com/luratnieks/better-auth-typeorm-adapter)
 
-## 🐛 Issues & Support
+## Issues & Support
 
 If you encounter any issues or need support, please [open an issue](https://github.com/luratnieks/better-auth-typeorm-adapter/issues) on GitHub.
 
 ---
 
-Made with ❤️ for the Better Auth community
-
-# better-auth-typeorm-adapter
+Made for the Better Auth community

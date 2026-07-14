@@ -4,6 +4,11 @@ This directory contains examples of how to use the Better Auth TypeORM Adapter i
 
 ## Available Examples
 
+### 0. Generated Entity Schemas (`generated-schemas.ts`) — recommended
+
+Derives every table (including plugin tables) from your Better Auth options
+with `generateEntitySchemas`, so no entity classes need to be written.
+
 ### 1. Basic Usage (`basic-usage.ts`)
 
 Simple setup showing the minimal configuration needed to get started.
@@ -23,7 +28,7 @@ How to use custom entity names and mappings instead of the default Better Auth e
 
 ### 4. Entity Examples (`entities/`)
 
-Complete entity definitions with UUID primary keys for:
+Complete entity definitions with text primary keys (Better Auth supplies its own string ids) for:
 
 - `user.entity.ts` - User entity with relationships
 - `account.entity.ts` - OAuth account entity
@@ -66,17 +71,18 @@ The adapter now supports automatic entity generation:
 npx @better-auth/cli generate
 ```
 
-This will create TypeORM entity files in `./src/entities/` with:
+This writes a single `auth-entities.ts` file containing one entity class per
+Better Auth model, with:
 
-- UUID primary keys (`@PrimaryGeneratedColumn('uuid')`)
-- Proper relationships and foreign keys
-- All required Better Auth fields
-- TypeScript decorators
+- Text primary keys (`@PrimaryColumn('text')` — Better Auth supplies its own string ids)
+- Relationships and foreign keys derived from the schema `references`
+- `simple-json` columns for JSON fields
+- Driver-appropriate date column types
 
-You can specify a custom output directory:
+You can specify a custom output file:
 
 ```bash
-npx @better-auth/cli generate --output ./custom/path
+npx @better-auth/cli generate --output src/entities/auth-entities.ts
 ```
 
 Alternatively, use TypeORM migrations:

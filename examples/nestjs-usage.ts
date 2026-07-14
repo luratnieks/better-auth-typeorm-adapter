@@ -77,7 +77,7 @@ export class AuthModule implements OnModuleInit {
   constructor(private authService: AuthService) {}
 
   async onModuleInit() {
-    console.log('✅ Better Auth initialized with TypeORM adapter');
+    console.log('Better Auth initialized with TypeORM adapter');
   }
 }
 
