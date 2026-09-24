@@ -125,6 +125,39 @@ function mapDataKeys(
 }
 
 /**
+ * Copies an entity instance into a plain object.
+ *
+ * Better Auth 1.7 validates row snapshots with a record schema that rejects
+ * class instances, so every returned row must be a plain object.
+ */
+function toRowSnapshot<T>(row: ObjectLiteral | null | undefined): T | null {
+  if (!row) return null;
+  const snapshot: Record<string, unknown> = {};
+  for (const key of Object.keys(row)) {
+    if (row[key] !== undefined) snapshot[key] = row[key];
+  }
+  return snapshot as T;
+}
+
+/**
+ * Pessimistic row locks are only valid on drivers that support
+ * `SELECT ... FOR UPDATE`. SQLite, used by the test suite, does not.
+ */
+function supportsPessimisticLock(dataSource: DataSource): boolean {
+  switch (dataSource.options.type) {
+    case 'postgres':
+    case 'cockroachdb':
+    case 'aurora-postgres':
+    case 'mysql':
+    case 'mariadb':
+    case 'aurora-mysql':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
  * TypeORM adapter for Better Auth.
  *
  * Implements every Better Auth adapter operation on top of TypeORM's
@@ -558,7 +591,7 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
               where: buildWhere(repository, where),
               select: buildSelect(repository, model, select),
             });
-            return (row ?? null) as T | null;
+            return toRowSnapshot<T>(row);
           }),
 
         /**
@@ -603,6 +636,78 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
           run('count', model, { where }, async () => {
             const repository = await getRepository(model);
             return repository.count({ where: buildWhere(repository, where) });
+          }),
+
+        /**
+         * Deletes one matching row and returns it. A second caller gets `null`
+         * once the row is gone. Postgres and MySQL lock the row inside the
+         * transaction; other drivers rely on the transaction alone.
+         */
+        consumeOne: async <T>({ model, where }: { model: string; where: CleanedWhere[] }): Promise<T | null> =>
+          run('consumeOne', model, { where }, async () => {
+            const repository = await getRepository(model);
+            return dataSource.transaction(async (manager) => {
+              const transactional = manager.getRepository(repository.metadata.target);
+              const existing = await transactional.findOne({
+                where: buildWhere(transactional, where),
+                ...(supportsPessimisticLock(dataSource)
+                  ? { lock: { mode: 'pessimistic_write' as const } }
+                  : {}),
+              });
+              if (!existing) return null;
+              const snapshot = toRowSnapshot<T>(existing);
+              if (isSoftDelete(model, transactional)) {
+                await transactional.softRemove(existing);
+              } else {
+                await transactional.remove(existing);
+              }
+              return snapshot;
+            });
+          }),
+
+        /**
+         * Applies numeric deltas and optional assignments to one matching row.
+         * Returns `null` when the `where` guard matches nothing.
+         */
+        incrementOne: async <T>({
+          model,
+          where,
+          increment,
+          set,
+        }: {
+          model: string;
+          where: CleanedWhere[];
+          increment: Record<string, number>;
+          set?: Record<string, unknown>;
+        }): Promise<T | null> =>
+          run('incrementOne', model, { where, increment, set }, async () => {
+            const repository = await getRepository(model);
+            return dataSource.transaction(async (manager) => {
+              const transactional = manager.getRepository(repository.metadata.target);
+              const existing = await transactional.findOne({
+                where: buildWhere(transactional, where),
+                ...(supportsPessimisticLock(dataSource)
+                  ? { lock: { mode: 'pessimistic_write' as const } }
+                  : {}),
+              });
+              if (!existing) return null;
+
+              const update: Record<string, unknown> = {};
+              for (const [field, value] of Object.entries(set ?? {})) {
+                if (value !== undefined) update[field] = value;
+              }
+              for (const [field, delta] of Object.entries(increment ?? {})) {
+                const property = toPropertyName(transactional, field);
+                const currentValue = existing[property];
+                const current = typeof currentValue === 'number' ? currentValue : Number(currentValue ?? 0);
+                update[field] = current + delta;
+              }
+              if (Object.keys(update).length === 0) return toRowSnapshot<T>(existing);
+
+              transactional.merge(existing, mapDataKeys(transactional, update));
+              const saved = await transactional.save(existing);
+              return toRowSnapshot<T>(saved);
+            });
           }),
 
         /**
