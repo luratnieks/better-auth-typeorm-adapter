@@ -140,24 +140,6 @@ function toRowSnapshot<T>(row: ObjectLiteral | null | undefined): T | null {
 }
 
 /**
- * Pessimistic row locks are only valid on drivers that support
- * `SELECT ... FOR UPDATE`. SQLite, used by the test suite, does not.
- */
-function supportsPessimisticLock(dataSource: DataSource): boolean {
-  switch (dataSource.options.type) {
-    case 'postgres':
-    case 'cockroachdb':
-    case 'aurora-postgres':
-    case 'mysql':
-    case 'mariadb':
-    case 'aurora-mysql':
-      return true;
-    default:
-      return false;
-  }
-}
-
-/**
  * TypeORM adapter for Better Auth.
  *
  * Implements every Better Auth adapter operation on top of TypeORM's
@@ -640,8 +622,7 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
 
         /**
          * Deletes one matching row and returns it. A second caller gets `null`
-         * once the row is gone. Postgres and MySQL lock the row inside the
-         * transaction; other drivers rely on the transaction alone.
+         * once the row is gone.
          */
         consumeOne: async <T>({ model, where }: { model: string; where: CleanedWhere[] }): Promise<T | null> =>
           run('consumeOne', model, { where }, async () => {
@@ -650,9 +631,6 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
               const transactional = manager.getRepository(repository.metadata.target);
               const existing = await transactional.findOne({
                 where: buildWhere(transactional, where),
-                ...(supportsPessimisticLock(dataSource)
-                  ? { lock: { mode: 'pessimistic_write' as const } }
-                  : {}),
               });
               if (!existing) return null;
               const snapshot = toRowSnapshot<T>(existing);
@@ -686,9 +664,6 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
               const transactional = manager.getRepository(repository.metadata.target);
               const existing = await transactional.findOne({
                 where: buildWhere(transactional, where),
-                ...(supportsPessimisticLock(dataSource)
-                  ? { lock: { mode: 'pessimistic_write' as const } }
-                  : {}),
               });
               if (!existing) return null;
 

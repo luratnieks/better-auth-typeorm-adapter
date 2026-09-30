@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `findOne` now returns a plain row snapshot. Better Auth 1.7 rejects TypeORM entity instances when reading a row for `incrementOne` and `consumeOne` (`Adapter must return a row snapshot or null`)
-- Native `incrementOne` and `consumeOne`. Better Auth 1.7 uses them for OTP consumption, two-factor counters and rate limits. Postgres and MySQL lock the row inside a transaction; other drivers run the same write in a transaction without `SELECT ... FOR UPDATE`
+- Native `incrementOne` and `consumeOne`. Better Auth 1.7 uses them for OTP consumption, two-factor counters and rate limits. Both run inside a transaction on every supported driver
 
 ## [1.2.0] - 2026-07-12
 
