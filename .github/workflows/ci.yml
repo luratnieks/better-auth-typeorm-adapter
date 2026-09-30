@@ -22,7 +22,10 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          curl -fsSL https://registry.npmjs.org/npm/-/npm-11.6.2.tgz -o /tmp/npm.tgz
+          tar -xzf /tmp/npm.tgz -C /tmp
+          node /tmp/package/bin/npm-cli.js install
 
       - name: Typecheck
         run: npm run typecheck
