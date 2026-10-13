@@ -18,6 +18,7 @@ import {
   MoreThanOrEqual,
   Not,
   Raw,
+  type EntityManager,
   type EntityMetadata,
   type EntityTarget,
   type FindOptionsWhere,
@@ -139,6 +140,22 @@ function toRowSnapshot<T>(row: ObjectLiteral | null | undefined): T | null {
   return snapshot as T;
 }
 
+const PESSIMISTIC_LOCK_DRIVERS: ReadonlySet<string> = new Set([
+  'aurora-mysql',
+  'aurora-postgres',
+  'cockroachdb',
+  'mariadb',
+  'mssql',
+  'mysql',
+  'oracle',
+  'postgres',
+]);
+
+export function pessimisticLock(dataSource: DataSource): { mode: 'pessimistic_write' } | undefined {
+  if (!PESSIMISTIC_LOCK_DRIVERS.has(dataSource.options.type)) return undefined;
+  return { mode: 'pessimistic_write' };
+}
+
 /**
  * TypeORM adapter for Better Auth.
  *
@@ -204,6 +221,25 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
           throw error;
         });
         return initializing;
+      };
+
+      let pendingTransaction: Promise<unknown> = Promise.resolve();
+
+      const transactionStrategies = {
+        locked: <T>(work: (manager: EntityManager) => Promise<T>) => dataSource.transaction(work),
+        serial: <T>(work: (manager: EntityManager) => Promise<T>) => {
+          const run = pendingTransaction.then(() => dataSource.transaction(work));
+          pendingTransaction = run.then(
+            () => undefined,
+            () => undefined,
+          );
+          return run;
+        },
+      };
+
+      const inTransaction = <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> => {
+        const strategy = pessimisticLock(dataSource) ? transactionStrategies.locked : transactionStrategies.serial;
+        return strategy(work);
       };
 
       /**
@@ -627,10 +663,11 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
         consumeOne: async <T>({ model, where }: { model: string; where: CleanedWhere[] }): Promise<T | null> =>
           run('consumeOne', model, { where }, async () => {
             const repository = await getRepository(model);
-            return dataSource.transaction(async (manager) => {
+            return inTransaction(async (manager) => {
               const transactional = manager.getRepository(repository.metadata.target);
               const existing = await transactional.findOne({
                 where: buildWhere(transactional, where),
+                lock: pessimisticLock(dataSource),
               });
               if (!existing) return null;
               const snapshot = toRowSnapshot<T>(existing);
@@ -660,10 +697,11 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
         }): Promise<T | null> =>
           run('incrementOne', model, { where, increment, set }, async () => {
             const repository = await getRepository(model);
-            return dataSource.transaction(async (manager) => {
+            return inTransaction(async (manager) => {
               const transactional = manager.getRepository(repository.metadata.target);
               const existing = await transactional.findOne({
                 where: buildWhere(transactional, where),
+                lock: pessimisticLock(dataSource),
               });
               if (!existing) return null;
 

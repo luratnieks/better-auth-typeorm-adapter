@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { after, describe, it } from 'node:test';
 import type { BetterAuthOptions } from 'better-auth/types';
 import { DataSource, EntitySchema } from 'typeorm';
+import { pessimisticLock } from '../src/adapter.ts';
 import { generateEntitySchemas, typeormAdapter, type TypeORMAdapterConfig } from '../src/index.ts';
 
 type TestContext = {
@@ -517,6 +518,54 @@ describe('incrementOne rate-limit guard (regression: issue #5 infinite loop)', (
     });
     assert.equal(updated!.requestCount, 6);
   });
+
+  it('lets one overlapping call win the lastRequest guard', async () => {
+    const { adapter } = createContext(apiKeyOptions);
+    const row = await adapter.create<Record<string, any>>({
+      model: 'apikey',
+      data: { requestCount: 0 },
+    });
+    const guard = [
+      { field: 'id', value: row.id },
+      { field: 'lastRequest', value: null },
+    ];
+    const claim = () =>
+      adapter.incrementOne<Record<string, any>>({
+        model: 'apikey',
+        where: guard,
+        increment: {},
+        set: { requestCount: 1, lastRequest: new Date() },
+      });
+
+    const [first, second] = await Promise.all([claim(), claim()]);
+    const winners = [first, second].filter((result) => result !== null);
+    assert.equal(winners.length, 1);
+    assert.equal(winners[0]!.requestCount, 1);
+  });
+
+  it('keeps every overlapping increment', async () => {
+    const { adapter } = createContext(apiKeyOptions);
+    const row = await adapter.create<Record<string, any>>({
+      model: 'apikey',
+      data: { requestCount: 0, lastRequest: new Date() },
+    });
+    const calls = 8;
+    await Promise.all(
+      Array.from({ length: calls }, () =>
+        adapter.incrementOne<Record<string, any>>({
+          model: 'apikey',
+          where: [{ field: 'id', value: row.id }],
+          increment: { requestCount: 1 },
+        }),
+      ),
+    );
+
+    const stored = await adapter.findOne<Record<string, any>>({
+      model: 'apikey',
+      where: [{ field: 'id', value: row.id }],
+    });
+    assert.equal(stored!.requestCount, calls);
+  });
 });
 
 describe('consumeOne (single-use token consumption)', () => {
@@ -530,6 +579,48 @@ describe('consumeOne (single-use token consumption)', () => {
 
     const again = await adapter.consumeOne<Record<string, any>>({ model: 'user', where });
     assert.equal(again, null);
+  });
+
+  it('returns the row to one caller when two consumes overlap', async () => {
+    const { adapter } = createContext();
+    const user = await createUser(adapter);
+    const where = [{ field: 'id', value: user.id }];
+    const claim = () => adapter.consumeOne<Record<string, any>>({ model: 'user', where });
+
+    const [first, second] = await Promise.all([claim(), claim()]);
+    const winners = [first, second].filter((result) => result !== null);
+    assert.equal(winners.length, 1);
+    assert.equal(winners[0]!.id, user.id);
+
+    const stored = await adapter.findOne<Record<string, any>>({ model: 'user', where });
+    assert.equal(stored, null);
+  });
+});
+
+describe('pessimistic lock drivers', () => {
+  const lockingDrivers = [
+    'aurora-mysql',
+    'aurora-postgres',
+    'cockroachdb',
+    'mariadb',
+    'mssql',
+    'mysql',
+    'oracle',
+    'postgres',
+  ];
+
+  function lockFor(type: string) {
+    return pessimisticLock({ options: { type } } as DataSource);
+  }
+
+  it('locks drivers that accept pessimistic_write', () => {
+    for (const type of lockingDrivers) {
+      assert.deepEqual(lockFor(type), { mode: 'pessimistic_write' });
+    }
+  });
+
+  it('skips better-sqlite3', () => {
+    assert.equal(lockFor('better-sqlite3'), undefined);
   });
 });
 

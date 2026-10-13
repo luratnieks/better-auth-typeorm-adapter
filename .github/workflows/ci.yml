@@ -24,6 +24,16 @@ jobs:
       - name: Install dependencies
         run: |
           curl -fsSL https://registry.npmjs.org/npm/-/npm-11.6.2.tgz -o /tmp/npm.tgz
+          node <<'EOF'
+          const { createHash } = require('node:crypto');
+          const { readFileSync } = require('node:fs');
+          const expected = 'sha512-7iKzNfy8lWYs3zq4oFPa8EXZz5xt9gQNKJZau3B1ErLBb6bF7sBJ00x09485DOvRT2l5Gerbl3VlZNT57MxJVA==';
+          const actual = 'sha512-' + createHash('sha512').update(readFileSync('/tmp/npm.tgz')).digest('base64');
+          if (actual !== expected) {
+            process.stderr.write('npm tarball integrity mismatch\n');
+            process.exit(1);
+          }
+          EOF
           tar -xzf /tmp/npm.tgz -C /tmp
           node /tmp/package/bin/npm-cli.js install
 
