@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `findOne` now returns a plain row snapshot. Better Auth 1.7 rejects TypeORM entity instances when reading a row for `incrementOne` and `consumeOne` (`Adapter must return a row snapshot or null`)
-- Native `incrementOne` and `consumeOne`. Better Auth 1.7 uses them for OTP consumption, two-factor counters and rate limits. Both run inside a transaction on every supported driver, and take a pessimistic write lock on Postgres, CockroachDB, MySQL, MariaDB, Aurora, Oracle and SQL Server. Drivers without that lock run these transactions one at a time
+- Native `incrementOne` and `consumeOne`. Better Auth 1.7 uses them for OTP consumption, two-factor counters and rate limits. Both run inside a transaction on every supported driver, and take a pessimistic write lock on Postgres, CockroachDB, MySQL, MariaDB, Aurora, Oracle and SQL Server. SQLite starts these transactions with `BEGIN IMMEDIATE`, so the reserved lock covers concurrent connections and processes; waiters honor the driver `timeout` (default 5s) before `SQLITE_BUSY`
 
 ## [1.2.0] - 2026-07-12
 

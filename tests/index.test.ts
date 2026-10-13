@@ -11,8 +11,13 @@
  *   node --experimental-strip-types --test tests/index.test.ts
  */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
+import { Worker } from 'node:worker_threads';
 import type { BetterAuthOptions } from 'better-auth/types';
 import { DataSource, EntitySchema } from 'typeorm';
 import { pessimisticLock } from '../src/adapter.ts';
@@ -594,6 +599,160 @@ describe('consumeOne (single-use token consumption)', () => {
 
     const stored = await adapter.findOne<Record<string, any>>({ model: 'user', where });
     assert.equal(stored, null);
+  });
+});
+
+describe('SQLite cross-connection race (two DataSources on the same file)', () => {
+  const raceOptions = {
+    plugins: [
+      {
+        id: 'apikey-like',
+        schema: {
+          apikey: {
+            fields: {
+              requestCount: { type: 'number', required: false },
+              lastRequest: { type: 'date', required: false },
+            },
+          },
+        },
+      },
+    ],
+  } as unknown as BetterAuthOptions;
+
+  async function withFileContext(
+    run: (
+      adapter: TestContext['adapter'],
+      spawnWorker: (
+        task: 'consume' | 'guard' | 'increment',
+        rowId: string,
+        repetitions: number,
+      ) => Promise<{ start: () => Promise<unknown[]> }>,
+    ) => Promise<void>,
+  ): Promise<void> {
+    const databasePath = join(tmpdir(), `ba-race-${randomUUID()}.sqlite`);
+    const dataSource = new DataSource({
+      type: 'better-sqlite3',
+      database: databasePath,
+      entities: generateEntitySchemas(raceOptions),
+      synchronize: true,
+      logging: false,
+    });
+    const adapter = typeormAdapter({ dataSource })(raceOptions);
+    const workers: Worker[] = [];
+
+    const spawnWorker = async (
+      task: 'consume' | 'guard' | 'increment',
+      rowId: string,
+      repetitions: number,
+    ) => {
+      const worker = new Worker(new URL('./sqlite-race.worker.ts', import.meta.url), {
+        workerData: { databasePath, task, rowId, repetitions },
+      });
+      workers.push(worker);
+      const nextMessage = () =>
+        new Promise<any>((resolve, reject) => {
+          worker.once('message', resolve);
+          worker.once('error', reject);
+        });
+      assert.equal(await nextMessage(), 'ready');
+      return {
+        start: () => {
+          const results = nextMessage();
+          worker.postMessage('start');
+          return results as Promise<unknown[]>;
+        },
+      };
+    };
+
+    try {
+      await run(adapter, spawnWorker);
+    } finally {
+      await Promise.all(
+        workers.map((worker) => new Promise((resolve) => worker.once('exit', resolve))),
+      );
+      if (dataSource.isInitialized) await dataSource.destroy();
+      await rm(databasePath, { force: true });
+    }
+  }
+
+  it('gives the row to exactly one of two connections consuming it', async () => {
+    await withFileContext(async (adapter, spawnWorker) => {
+      const row = await adapter.create<Record<string, any>>({
+        model: 'apikey',
+        data: { requestCount: 0 },
+      });
+      const remote = await spawnWorker('consume', row.id, 1);
+
+      const remoteResults = remote.start();
+      const local = await adapter.consumeOne<Record<string, any>>({
+        model: 'apikey',
+        where: [{ field: 'id', value: row.id }],
+      });
+      const [remoteResult] = await remoteResults;
+
+      const winners = [local, remoteResult].filter((result) => result !== null);
+      assert.equal(winners.length, 1);
+
+      const stored = await adapter.findOne<Record<string, any>>({
+        model: 'apikey',
+        where: [{ field: 'id', value: row.id }],
+      });
+      assert.equal(stored, null);
+    });
+  });
+
+  it('lets exactly one of two connections win the lastRequest guard', async () => {
+    await withFileContext(async (adapter, spawnWorker) => {
+      const row = await adapter.create<Record<string, any>>({
+        model: 'apikey',
+        data: { requestCount: 0 },
+      });
+      const remote = await spawnWorker('guard', row.id, 1);
+
+      const remoteResults = remote.start();
+      const local = await adapter.incrementOne<Record<string, any>>({
+        model: 'apikey',
+        where: [
+          { field: 'id', value: row.id },
+          { field: 'lastRequest', value: null },
+        ],
+        increment: {},
+        set: { requestCount: 1, lastRequest: new Date() },
+      });
+      const [remoteResult] = await remoteResults;
+
+      const winners = [local, remoteResult].filter((result) => result !== null);
+      assert.equal(winners.length, 1);
+    });
+  });
+
+  it('keeps every increment across two connections', async () => {
+    await withFileContext(async (adapter, spawnWorker) => {
+      const perSide = 5;
+      const row = await adapter.create<Record<string, any>>({
+        model: 'apikey',
+        data: { requestCount: 0, lastRequest: new Date() },
+      });
+      const remote = await spawnWorker('increment', row.id, perSide);
+
+      const remoteResults = remote.start();
+      await Promise.all(
+        Array.from({ length: perSide }, () =>
+          adapter.incrementOne<Record<string, any>>({
+            model: 'apikey',
+            where: [{ field: 'id', value: row.id }],
+            increment: { requestCount: 1 },
+          }),
+        ),
+      );
+      await remoteResults;
+
+      const stored = await adapter.findOne<Record<string, any>>({
+        model: 'apikey',
+        where: [{ field: 'id', value: row.id }],
+      });
+      assert.equal(stored!.requestCount, perSide * 2);
+    });
   });
 });
 

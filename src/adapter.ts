@@ -156,6 +156,8 @@ export function pessimisticLock(dataSource: DataSource): { mode: 'pessimistic_wr
   return { mode: 'pessimistic_write' };
 }
 
+const SQLITE_IMMEDIATE_DRIVERS: ReadonlySet<string> = new Set(['better-sqlite3', 'sqlite']);
+
 /**
  * TypeORM adapter for Better Auth.
  *
@@ -225,22 +227,46 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
 
       let pendingTransaction: Promise<unknown> = Promise.resolve();
 
-      const transactionStrategies = {
-        locked: <T>(work: (manager: EntityManager) => Promise<T>) => dataSource.transaction(work),
-        serial: <T>(work: (manager: EntityManager) => Promise<T>) => {
-          const run = pendingTransaction.then(() => dataSource.transaction(work));
-          pendingTransaction = run.then(
-            () => undefined,
-            () => undefined,
-          );
-          return run;
-        },
+      const enqueue = <T>(start: () => Promise<T>): Promise<T> => {
+        const run = pendingTransaction.then(start);
+        pendingTransaction = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
       };
 
-      const inTransaction = <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> => {
-        const strategy = pessimisticLock(dataSource) ? transactionStrategies.locked : transactionStrategies.serial;
-        return strategy(work);
+      const immediateTransaction = async <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> => {
+        const queryRunner = dataSource.createQueryRunner();
+        try {
+          await queryRunner.query('BEGIN IMMEDIATE');
+          try {
+            const result = await work(queryRunner.manager);
+            await queryRunner.query('COMMIT');
+            return result;
+          } catch (error) {
+            await queryRunner.query('ROLLBACK');
+            throw error;
+          }
+        } finally {
+          await queryRunner.release();
+        }
       };
+
+      const transactionStrategies = {
+        locked: <T>(work: (manager: EntityManager) => Promise<T>) => dataSource.transaction(work),
+        immediate: <T>(work: (manager: EntityManager) => Promise<T>) => enqueue(() => immediateTransaction(work)),
+        serial: <T>(work: (manager: EntityManager) => Promise<T>) => enqueue(() => dataSource.transaction(work)),
+      };
+
+      const transactionStrategy = (): keyof typeof transactionStrategies => {
+        if (pessimisticLock(dataSource)) return 'locked';
+        if (SQLITE_IMMEDIATE_DRIVERS.has(dataSource.options.type)) return 'immediate';
+        return 'serial';
+      };
+
+      const inTransaction = <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> =>
+        transactionStrategies[transactionStrategy()](work);
 
       /**
        * Resolves the TypeORM repository for a Better Auth model.
@@ -672,9 +698,9 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
               if (!existing) return null;
               const snapshot = toRowSnapshot<T>(existing);
               if (isSoftDelete(model, transactional)) {
-                await transactional.softRemove(existing);
+                await transactional.softRemove(existing, { transaction: false });
               } else {
-                await transactional.remove(existing);
+                await transactional.remove(existing, { transaction: false });
               }
               return snapshot;
             });
@@ -718,7 +744,7 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
               if (Object.keys(update).length === 0) return toRowSnapshot<T>(existing);
 
               transactional.merge(existing, mapDataKeys(transactional, update));
-              const saved = await transactional.save(existing);
+              const saved = await transactional.save(existing, { transaction: false });
               return toRowSnapshot<T>(saved);
             });
           }),
