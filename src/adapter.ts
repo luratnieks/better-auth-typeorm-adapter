@@ -24,6 +24,7 @@ import {
   type ObjectLiteral,
   type Repository,
 } from 'typeorm';
+import { createRowTransaction } from './row-transaction.ts';
 import { generateEntitiesFileCode } from './schema.ts';
 
 /**
@@ -125,6 +126,34 @@ function mapDataKeys(
 }
 
 /**
+ * Copies an entity instance into a plain object.
+ *
+ * Better Auth 1.7 validates the rows returned by `findOne`, `consumeOne`
+ * and `incrementOne` with a record schema that rejects class instances.
+ */
+function toRowSnapshot<T>(row: ObjectLiteral | null | undefined): T | null {
+  if (!row) return null;
+  const snapshot: Record<string, unknown> = {};
+  for (const key of Object.keys(row)) {
+    if (row[key] !== undefined) snapshot[key] = row[key];
+  }
+  return snapshot as T;
+}
+
+/**
+ * Adds an `incrementOne` delta to a stored counter value. `null` and
+ * `undefined` count as zero; anything other than a finite number is a
+ * schema problem and throws instead of writing `NaN`.
+ */
+export function incrementValue(field: string, current: unknown, delta: number): number {
+  if (current === null || current === undefined) return delta;
+  if (typeof current === 'number' && Number.isFinite(current)) return current + delta;
+  throw new BetterAuthError(
+    `[TypeORM Adapter] Cannot increment "${field}": stored value is not a finite number`,
+  );
+}
+
+/**
  * TypeORM adapter for Better Auth.
  *
  * Implements every Better Auth adapter operation on top of TypeORM's
@@ -156,6 +185,8 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
     entities = {},
     softDeleteEnabledEntities = [],
   } = config;
+
+  const rowTransaction = createRowTransaction(dataSource);
 
   return createAdapterFactory({
     config: {
@@ -425,6 +456,28 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
       };
 
       /**
+       * Runs `mutate` against the single row matching `where`, inside the
+       * driver's row transaction and holding its row lock when the driver
+       * has one. Returns `null` when no row matches.
+       */
+      const withMatchingRow = async <T>(
+        model: string,
+        where: CleanedWhere[],
+        mutate: (repository: Repository<ObjectLiteral>, existing: ObjectLiteral) => Promise<T | null>,
+      ): Promise<T | null> => {
+        const repository = await getRepository(model);
+        return rowTransaction.run(async (manager) => {
+          const transactional = manager.getRepository(repository.metadata.target);
+          const existing = await transactional.findOne({
+            where: buildWhere(transactional, where),
+            lock: rowTransaction.lock,
+          });
+          if (!existing) return null;
+          return mutate(transactional, existing);
+        });
+      };
+
+      /**
        * Logs and executes an adapter operation, surfacing failures as
        * `BetterAuthError` with the model and operation in the message.
        */
@@ -558,7 +611,7 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
               where: buildWhere(repository, where),
               select: buildSelect(repository, model, select),
             });
-            return (row ?? null) as T | null;
+            return toRowSnapshot<T>(row);
           }),
 
         /**
@@ -604,6 +657,55 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
             const repository = await getRepository(model);
             return repository.count({ where: buildWhere(repository, where) });
           }),
+
+        /**
+         * Deletes one matching row and returns it. A second caller gets `null`
+         * once the row is gone.
+         */
+        consumeOne: async <T>({ model, where }: { model: string; where: CleanedWhere[] }): Promise<T | null> =>
+          run('consumeOne', model, { where }, () =>
+            withMatchingRow<T>(model, where, async (repository, existing) => {
+              const snapshot = toRowSnapshot<T>(existing);
+              if (isSoftDelete(model, repository)) {
+                await repository.softRemove(existing);
+              } else {
+                await repository.remove(existing);
+              }
+              return snapshot;
+            }),
+          ),
+
+        /**
+         * Applies numeric deltas and optional assignments to one matching row.
+         * Returns `null` when the `where` guard matches nothing.
+         */
+        incrementOne: async <T>({
+          model,
+          where,
+          increment,
+          set,
+        }: {
+          model: string;
+          where: CleanedWhere[];
+          increment: Record<string, number>;
+          set?: Record<string, unknown>;
+        }): Promise<T | null> =>
+          run('incrementOne', model, { where, increment, set }, () =>
+            withMatchingRow<T>(model, where, async (repository, existing) => {
+              const update: Record<string, unknown> = {};
+              for (const [field, value] of Object.entries(set ?? {})) {
+                if (value !== undefined) update[field] = value;
+              }
+              for (const [field, delta] of Object.entries(increment ?? {})) {
+                const property = toPropertyName(repository, field);
+                update[field] = incrementValue(field, existing[property], delta);
+              }
+              if (Object.keys(update).length === 0) return toRowSnapshot<T>(existing);
+
+              repository.merge(existing, mapDataKeys(repository, update));
+              return toRowSnapshot<T>(await repository.save(existing));
+            }),
+          ),
 
         /**
          * Generates decorator-based TypeORM entity classes for the Better
