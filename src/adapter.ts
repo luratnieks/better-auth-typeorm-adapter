@@ -18,13 +18,13 @@ import {
   MoreThanOrEqual,
   Not,
   Raw,
-  type EntityManager,
   type EntityMetadata,
   type EntityTarget,
   type FindOptionsWhere,
   type ObjectLiteral,
   type Repository,
 } from 'typeorm';
+import { createRowTransaction } from './row-transaction.ts';
 import { generateEntitiesFileCode } from './schema.ts';
 
 /**
@@ -128,8 +128,8 @@ function mapDataKeys(
 /**
  * Copies an entity instance into a plain object.
  *
- * Better Auth 1.7 validates row snapshots with a record schema that rejects
- * class instances, so every returned row must be a plain object.
+ * Better Auth 1.7 validates the rows returned by `findOne`, `consumeOne`
+ * and `incrementOne` with a record schema that rejects class instances.
  */
 function toRowSnapshot<T>(row: ObjectLiteral | null | undefined): T | null {
   if (!row) return null;
@@ -140,23 +140,18 @@ function toRowSnapshot<T>(row: ObjectLiteral | null | undefined): T | null {
   return snapshot as T;
 }
 
-const PESSIMISTIC_LOCK_DRIVERS: ReadonlySet<string> = new Set([
-  'aurora-mysql',
-  'aurora-postgres',
-  'cockroachdb',
-  'mariadb',
-  'mssql',
-  'mysql',
-  'oracle',
-  'postgres',
-]);
-
-export function pessimisticLock(dataSource: DataSource): { mode: 'pessimistic_write' } | undefined {
-  if (!PESSIMISTIC_LOCK_DRIVERS.has(dataSource.options.type)) return undefined;
-  return { mode: 'pessimistic_write' };
+/**
+ * Adds an `incrementOne` delta to a stored counter value. `null` and
+ * `undefined` count as zero; anything other than a finite number is a
+ * schema problem and throws instead of writing `NaN`.
+ */
+export function incrementValue(field: string, current: unknown, delta: number): number {
+  if (current === null || current === undefined) return delta;
+  if (typeof current === 'number' && Number.isFinite(current)) return current + delta;
+  throw new BetterAuthError(
+    `[TypeORM Adapter] Cannot increment "${field}": stored value is not a finite number`,
+  );
 }
-
-const SQLITE_IMMEDIATE_DRIVERS: ReadonlySet<string> = new Set(['better-sqlite3', 'sqlite']);
 
 /**
  * TypeORM adapter for Better Auth.
@@ -191,6 +186,8 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
     softDeleteEnabledEntities = [],
   } = config;
 
+  const rowTransaction = createRowTransaction(dataSource);
+
   return createAdapterFactory({
     config: {
       adapterId: 'typeorm-adapter',
@@ -224,49 +221,6 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
         });
         return initializing;
       };
-
-      let pendingTransaction: Promise<unknown> = Promise.resolve();
-
-      const enqueue = <T>(start: () => Promise<T>): Promise<T> => {
-        const run = pendingTransaction.then(start);
-        pendingTransaction = run.then(
-          () => undefined,
-          () => undefined,
-        );
-        return run;
-      };
-
-      const immediateTransaction = async <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> => {
-        const queryRunner = dataSource.createQueryRunner();
-        try {
-          await queryRunner.query('BEGIN IMMEDIATE');
-          try {
-            const result = await work(queryRunner.manager);
-            await queryRunner.query('COMMIT');
-            return result;
-          } catch (error) {
-            await queryRunner.query('ROLLBACK');
-            throw error;
-          }
-        } finally {
-          await queryRunner.release();
-        }
-      };
-
-      const transactionStrategies = {
-        locked: <T>(work: (manager: EntityManager) => Promise<T>) => dataSource.transaction(work),
-        immediate: <T>(work: (manager: EntityManager) => Promise<T>) => enqueue(() => immediateTransaction(work)),
-        serial: <T>(work: (manager: EntityManager) => Promise<T>) => enqueue(() => dataSource.transaction(work)),
-      };
-
-      const transactionStrategy = (): keyof typeof transactionStrategies => {
-        if (pessimisticLock(dataSource)) return 'locked';
-        if (SQLITE_IMMEDIATE_DRIVERS.has(dataSource.options.type)) return 'immediate';
-        return 'serial';
-      };
-
-      const inTransaction = <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> =>
-        transactionStrategies[transactionStrategy()](work);
 
       /**
        * Resolves the TypeORM repository for a Better Auth model.
@@ -502,6 +456,28 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
       };
 
       /**
+       * Runs `mutate` against the single row matching `where`, inside the
+       * driver's row transaction and holding its row lock when the driver
+       * has one. Returns `null` when no row matches.
+       */
+      const withMatchingRow = async <T>(
+        model: string,
+        where: CleanedWhere[],
+        mutate: (repository: Repository<ObjectLiteral>, existing: ObjectLiteral) => Promise<T | null>,
+      ): Promise<T | null> => {
+        const repository = await getRepository(model);
+        return rowTransaction.run(async (manager) => {
+          const transactional = manager.getRepository(repository.metadata.target);
+          const existing = await transactional.findOne({
+            where: buildWhere(transactional, where),
+            lock: rowTransaction.lock,
+          });
+          if (!existing) return null;
+          return mutate(transactional, existing);
+        });
+      };
+
+      /**
        * Logs and executes an adapter operation, surfacing failures as
        * `BetterAuthError` with the model and operation in the message.
        */
@@ -687,24 +663,17 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
          * once the row is gone.
          */
         consumeOne: async <T>({ model, where }: { model: string; where: CleanedWhere[] }): Promise<T | null> =>
-          run('consumeOne', model, { where }, async () => {
-            const repository = await getRepository(model);
-            return inTransaction(async (manager) => {
-              const transactional = manager.getRepository(repository.metadata.target);
-              const existing = await transactional.findOne({
-                where: buildWhere(transactional, where),
-                lock: pessimisticLock(dataSource),
-              });
-              if (!existing) return null;
+          run('consumeOne', model, { where }, () =>
+            withMatchingRow<T>(model, where, async (repository, existing) => {
               const snapshot = toRowSnapshot<T>(existing);
-              if (isSoftDelete(model, transactional)) {
-                await transactional.softRemove(existing, { transaction: false });
+              if (isSoftDelete(model, repository)) {
+                await repository.softRemove(existing);
               } else {
-                await transactional.remove(existing, { transaction: false });
+                await repository.remove(existing);
               }
               return snapshot;
-            });
-          }),
+            }),
+          ),
 
         /**
          * Applies numeric deltas and optional assignments to one matching row.
@@ -721,33 +690,22 @@ export const typeormAdapter = (config: TypeORMAdapterConfig) => {
           increment: Record<string, number>;
           set?: Record<string, unknown>;
         }): Promise<T | null> =>
-          run('incrementOne', model, { where, increment, set }, async () => {
-            const repository = await getRepository(model);
-            return inTransaction(async (manager) => {
-              const transactional = manager.getRepository(repository.metadata.target);
-              const existing = await transactional.findOne({
-                where: buildWhere(transactional, where),
-                lock: pessimisticLock(dataSource),
-              });
-              if (!existing) return null;
-
+          run('incrementOne', model, { where, increment, set }, () =>
+            withMatchingRow<T>(model, where, async (repository, existing) => {
               const update: Record<string, unknown> = {};
               for (const [field, value] of Object.entries(set ?? {})) {
                 if (value !== undefined) update[field] = value;
               }
               for (const [field, delta] of Object.entries(increment ?? {})) {
-                const property = toPropertyName(transactional, field);
-                const currentValue = existing[property];
-                const current = typeof currentValue === 'number' ? currentValue : Number(currentValue ?? 0);
-                update[field] = current + delta;
+                const property = toPropertyName(repository, field);
+                update[field] = incrementValue(field, existing[property], delta);
               }
               if (Object.keys(update).length === 0) return toRowSnapshot<T>(existing);
 
-              transactional.merge(existing, mapDataKeys(transactional, update));
-              const saved = await transactional.save(existing, { transaction: false });
-              return toRowSnapshot<T>(saved);
-            });
-          }),
+              repository.merge(existing, mapDataKeys(repository, update));
+              return toRowSnapshot<T>(await repository.save(existing));
+            }),
+          ),
 
         /**
          * Generates decorator-based TypeORM entity classes for the Better

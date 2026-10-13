@@ -20,7 +20,8 @@ import { after, describe, it } from 'node:test';
 import { Worker } from 'node:worker_threads';
 import type { BetterAuthOptions } from 'better-auth/types';
 import { DataSource, EntitySchema } from 'typeorm';
-import { pessimisticLock } from '../src/adapter.ts';
+import { incrementValue } from '../src/adapter.ts';
+import { createRowTransaction } from '../src/row-transaction.ts';
 import { generateEntitySchemas, typeormAdapter, type TypeORMAdapterConfig } from '../src/index.ts';
 
 type TestContext = {
@@ -756,7 +757,7 @@ describe('SQLite cross-connection race (two DataSources on the same file)', () =
   });
 });
 
-describe('pessimistic lock drivers', () => {
+describe('row transaction policy', () => {
   const lockingDrivers = [
     'aurora-mysql',
     'aurora-postgres',
@@ -768,18 +769,38 @@ describe('pessimistic lock drivers', () => {
     'postgres',
   ];
 
-  function lockFor(type: string) {
-    return pessimisticLock({ options: { type } } as DataSource);
+  function policyFor(type: string) {
+    return createRowTransaction({ options: { type } } as DataSource);
   }
 
   it('locks drivers that accept pessimistic_write', () => {
     for (const type of lockingDrivers) {
-      assert.deepEqual(lockFor(type), { mode: 'pessimistic_write' });
+      assert.deepEqual(policyFor(type).lock, { mode: 'pessimistic_write' });
     }
   });
 
-  it('skips better-sqlite3', () => {
-    assert.equal(lockFor('better-sqlite3'), undefined);
+  it('skips the lock on better-sqlite3, sqlite and sqljs', () => {
+    for (const type of ['better-sqlite3', 'sqlite', 'sqljs']) {
+      assert.equal(policyFor(type).lock, undefined);
+    }
+  });
+});
+
+describe('incrementValue', () => {
+  it('treats null and undefined as zero', () => {
+    assert.equal(incrementValue('requestCount', null, 3), 3);
+    assert.equal(incrementValue('requestCount', undefined, 3), 3);
+  });
+
+  it('adds finite numbers', () => {
+    assert.equal(incrementValue('requestCount', 5, 2), 7);
+    assert.equal(incrementValue('requestCount', -1, 1), 0);
+  });
+
+  it('throws on non-numeric stored values', () => {
+    for (const current of ['5', NaN, Infinity, new Date(), {}]) {
+      assert.throws(() => incrementValue('requestCount', current, 1), /not a finite number/);
+    }
   });
 });
 
